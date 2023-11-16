@@ -330,49 +330,43 @@ pub(crate) fn impl_to_local_in_new_timezone(
                 let lat = coords.0.0.unwrap();
                 let lng = coords.0.1.unwrap();
                 let coordinates = GeoPoint{lat: NotNan::new(lat).unwrap(), lon:NotNan::new(lng).unwrap()};
-                let timestamp = coords.1;
+                if let Some(timestamp) = coords.1 {
+                    let location_time = GeoPointTime{location: coordinates, dt: timestamp};
+                    let cached_date =  dates_cache.get(&location_time);
+                    match cached_date {
+                        //Ok we have already come across this specific date in the same lat / lon
+                        //return the result
+                        Some(dt) => {
+                            Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt))
+                        },
+                        None => {
+                            //Check if we have already looked up the timezone for this lat / long
+                            let cache_key = coordinates_cache.get(&coordinates);
 
-                //Check if we already have a local datetime for this coordinate and date
-                match timestamp {
-                    Some(dt) => {
-                        let location_time = GeoPointTime{location: coordinates, dt};
-                        let cached_date =  dates_cache.get(&location_time);
-                        match cached_date {
-                            //Ok we have already come across this specific date in the same lat / lon
-                            //return the result
-                            Some(dt) => {
-                                println!("Found match in cache");
-                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt))
-                            },
-                            None => {
-                                //Check if we have already looked up the timezone for this lat / long
-                                let cache_key = coordinates_cache.get(&coordinates);
+                            let time_zone = match cache_key {
+                                Some(key) => key,
+                                None => {
+                                    let timezone_names = FINDER.get_tz_names(lng, lat);
+                                    let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
+                                    coordinates_cache.insert(coordinates.clone(), time_zone);
+                                    time_zone
+                                }
+                            };
 
-                                let time_zone = match cache_key {
-                                    Some(key) => key,
-                                    None => {
-                                        let timezone_names = FINDER.get_tz_names(lng, lat);
-                                        let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
-                                        coordinates_cache.insert(coordinates.clone(), time_zone);
-                                        time_zone
-                                    }
-                                };
-
-                                //We not have the timezone either from the cache or from a function call
-                                //now get the local time and cache it
-                                let ndt = timestamp_to_datetime(dt);
-                                let to_tz = parse_time_zone(time_zone)?;
-                                let result = naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?;
-                                dates_cache.insert(location_time, result);
-                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(result))
-                            }
+                            //We not have the timezone either from the cache or from a function call
+                            //now get the local time and cache it
+                            let ndt = timestamp_to_datetime(timestamp);
+                            let to_tz = parse_time_zone(time_zone)?;
+                            let result = naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?;
+                            dates_cache.insert(location_time, result);
+                            Ok::<Option<NaiveDateTime>, PolarsError>(Some(result))
                         }
- 
-
-
-                    },
-                    _ => Ok(None),
+                    }
+                } else {
+                    polars_bail!(ComputeError:"Is not struct type")
                 }
+
+   
             });
     
     let data = results.map(|r| {
