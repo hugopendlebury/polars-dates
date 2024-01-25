@@ -1,0 +1,16 @@
+/pyo3-polars/target
+Cargo.lock
+.idea/
+venv/
+target/
+rust-toolchain.toml
+*.pyc
+.hypothesis/
+*.html
+*.bat
+*.js
+docs/_build
+docs/api/*
+*.so
+__pycache__/
+polars_dates/__pycache__/
