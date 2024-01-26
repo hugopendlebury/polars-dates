@@ -3,7 +3,7 @@ use std::io::Error;
 
 use polars::prelude::*;
 use lazy_static::lazy_static;
-use chrono::{LocalResult, NaiveDateTime, TimeZone};
+use chrono::{LocalResult, NaiveDateTime, TimeZone, DateTime};
 
 use chrono_tz::Tz;
 use pyo3_polars::export::polars_core::error::PolarsError;
@@ -50,6 +50,43 @@ struct Coordinates{
     lat: Distance,
     lon: Distance
 }
+
+
+pub(crate) fn impl_time_zone_difference_from(
+    from_tz: &str,
+    lat: &Series,
+    lons: &Series
+)  -> PolarsResult<Series> {
+    let mut cache = HashMap::<Coordinates, &str>::new();
+    let lats_iter = lat.f64()?.into_iter();
+    let lons_iter = lons.f64()?.into_iter();
+    cache.get(&Coordinates{lat: Distance::new(1.1), lon:Distance::new(1.2)});
+    let results = lats_iter.zip(lons_iter).map(|coords| {
+        
+        let lat = coords.0.map_or(0.0, |f| f);
+        let lng = coords.1.map_or(0.0, |f| f);
+        let lkp_key = Coordinates{lat: Distance::new(lat), lon:Distance::new(lng)};
+        let cache_key = cache.get(&lkp_key);
+
+        match cache_key {
+            Some(key) => key,
+            None => {
+                let timezone_names = FINDER.get_tz_names(lng, lat);
+                let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
+                cache.insert(lkp_key, time_zone);
+                time_zone
+            }
+        }
+        let from_tz = parse_time_zone(from_tz);
+        let start_date = DateTime<from_tz>
+        start_date
+
+    });
+
+    Ok(Series::from_iter(results))
+}
+
+
 pub(crate) fn impl_lookup_timezone(
     lat: &Series,
     lons: &Series

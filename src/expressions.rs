@@ -1,6 +1,12 @@
 use crate::dateconversions::*;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct FromDatetimeKwargs {
+    from_tz: String
+}
 
 #[polars_expr(output_type=Utf8)]
 fn lookup_timezone(inputs: &[Series]) -> PolarsResult<Series> {
@@ -8,6 +14,14 @@ fn lookup_timezone(inputs: &[Series]) -> PolarsResult<Series> {
     let lats = &inputs[0];
     let lons = &inputs[1];
     impl_lookup_timezone(lats, lons)
+}
+
+
+#[polars_expr(output_type=UInt16)]
+fn time_zone_difference_from(inputs: &[Series], kwargs: FromDatetimeKwargs) -> PolarsResult<Series> {
+    let lats = &inputs[0];
+    let lons = &inputs[1];
+    impl_time_zone_difference_from(&kwargs.from_tz, lats, lons)
 }
 
 #[polars_expr(output_type_func=from_local_datetime)]

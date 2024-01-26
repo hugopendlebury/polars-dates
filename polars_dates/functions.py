@@ -71,6 +71,54 @@ def lookup_timezone(expr: str | pl.Expr, other: IntoExpr) -> pl.Expr:
     )
 
 
+def time_zone_difference_from(from_tz: str, expr: str | pl.Expr, other: IntoExpr) -> pl.Expr:
+    """
+    Returns the differnce in seconds between two timezones based on the latitude and longitude of a point
+
+    Examples
+    --------
+    >>> import polars as pl
+    >>> import polars_dates as pl_dates
+    >>> from datetime import datetime
+    >>> df = (
+    ...     pl.DataFrame(data = {'lat' : [51.5054, 51.5054, 40.7128, 40.7128, 40.7128], 
+    ...                         'lon' : [0.0235, 0.0235, -74.0060, -74.0060, -74.0060],
+    ...                         'dt': [datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,3,0,0),
+    ...                                 datetime(2024,1,24,3,0,0)],
+    ...                         'values' : [5,5,5,10,10]}
+    ...                 )
+    ...     .with_columns(
+    ...          timezone = pl_dates.time_zone_difference_from("UTC", pl.col("lat"), pl.col("lon"))
+    ...     )
+    ... ) 
+
+    shape: (5, 5)
+    ┌─────────┬─────────┬─────────────────────┬────────┬──────────────────┐
+    │ lat     ┆ lon     ┆ dt                  ┆ values ┆ timezone         │
+    │ ---     ┆ ---     ┆ ---                 ┆ ---    ┆ ---              │
+    │ f64     ┆ f64     ┆ datetime[μs]        ┆ i64    ┆ str              │
+    ╞═════════╪═════════╪═════════════════════╪════════╪══════════════════╡
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ Europe/London    │
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ Europe/London    │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 09:00:00 ┆ 5      ┆ America/New_York │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ America/New_York │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ America/New_York │
+    └─────────┴─────────┴─────────────────────┴────────┴──────────────────┘
+    """
+    expr = parse_into_expr(expr)
+    return expr.register_plugin(
+        lib=lib,
+        symbol="time_zone_difference_from",
+        args=[expr, other],
+        kwargs={
+                "from_tz": from_tz,
+            },
+        is_elementwise=True,
+    )
+
 def to_local_in_new_timezone(expr: str | pl.Expr, lat: IntoExpr, lon: IntoExpr) -> pl.Expr:
     """
     Uses the latitude and longitude to find the time zone then returns a date / time which is 
