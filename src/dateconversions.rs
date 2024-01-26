@@ -1,14 +1,13 @@
 use std::collections::HashMap;
+use std::io::Error;
 
 use polars::prelude::*;
 use lazy_static::lazy_static;
 use chrono::{LocalResult, NaiveDateTime, TimeZone};
-use polars::chunked_array::temporal::parse_time_zone;
+
 use chrono_tz::Tz;
-use chrono::prelude::*;
-use polars_arrow::legacy::is_valid::ArrowArray;
-use pyo3_polars::export::polars_core;
-use pyo3_polars::export::polars_core::utils::arrow::legacy::kernels::Ambiguous;
+use pyo3_polars::export::polars_core::error::PolarsError;
+
 use pyo3_polars::export::polars_core::utils::arrow::temporal_conversions::{
     timestamp_ms_to_datetime, timestamp_ns_to_datetime, timestamp_us_to_datetime,
 };
@@ -46,7 +45,6 @@ impl Distance {
     }
 }
 
-//#[derive(PartialEq, PartialOrd)]
 #[derive(Eq, Hash, PartialEq)]
 struct Coordinates{
     lat: Distance,
@@ -83,7 +81,20 @@ pub(crate) fn impl_lookup_timezone(
     Ok(Series::from_iter(results))
 }
 
+fn parse_time_zone(time_zone: &str) -> Result<Tz, PolarsError> {
+    let x: Result<Tz, String> = time_zone.parse::<Tz>();
+    match x {
+        Ok(r) => { Ok(r)},
+        Err(_) => Err(PolarsError::Io(Error::new(std::io::ErrorKind::Unsupported, 
+            format!("Unable to convert timezone {}", time_zone))))
+    }
+}
 
+enum Ambiguous {
+    Earliest,
+    Latest,
+    Raise
+}
 
 pub(crate) fn impl_to_local_in_new_timezone(
     dates: &Series,
@@ -93,7 +104,6 @@ pub(crate) fn impl_to_local_in_new_timezone(
     ambiguous: &str,
 )  -> PolarsResult<Series> {
     let dtype = dates.dtype();
-    println!("called with dtype {}", dtype);
 
     let from_time_zone = "UTC";
     let from_tz = parse_time_zone(from_time_zone)?;
@@ -162,37 +172,13 @@ pub(crate) fn impl_to_local_in_new_timezone(
 
 }
 
-fn naive_local_to_naive_utc_in_new_time_zone(
-    from_tz: &Tz,
-    to_tz: &Tz,
-    ndt: NaiveDateTime,
-    ambiguous: &Ambiguous,
-) -> PolarsResult<NaiveDateTime> {
-    println!("Converting {} from {} to {}", ndt, from_tz, to_tz);
-    match from_tz.from_local_datetime(&ndt) {
-        LocalResult::Single(dt) => Ok(dt.with_timezone(to_tz).naive_utc()),
-        LocalResult::Ambiguous(dt_earliest, dt_latest) => match ambiguous {
-            Ambiguous::Earliest => Ok(dt_earliest.with_timezone(to_tz).naive_utc()),
-            Ambiguous::Latest => Ok(dt_latest.with_timezone(to_tz).naive_utc()),
-            Ambiguous::Raise => {
-                polars_bail!(ComputeError: "datetime '{}' is ambiguous in time zone '{}'. Please use `ambiguous` to tell how it should be localized.", ndt, to_tz)
-            }
-        },
-        LocalResult::None => polars_bail!(ComputeError:
-            "datetime '{}' is non-existent in time zone '{}'. Non-existent datetimes are not yet supported",
-            ndt, to_tz
-        ),
-    }
-}
-
-
 fn naive_local_to_naive_local_in_new_time_zone(
     from_tz: &Tz,
     to_tz: &Tz,
     ndt: NaiveDateTime,
     ambiguous: &Ambiguous,
 ) -> PolarsResult<NaiveDateTime> {
-    println!("Converting {} from {} to {}", ndt, from_tz, to_tz);
+
     match from_tz.from_local_datetime(&ndt) {
         LocalResult::Single(dt) => Ok(dt.with_timezone(to_tz).naive_local()),
         LocalResult::Ambiguous(dt_earliest, dt_latest) => match ambiguous {
@@ -207,37 +193,4 @@ fn naive_local_to_naive_local_in_new_time_zone(
             ndt, to_tz
         ),
     }
-}
-
-
-
-fn naive_local_to_tzaware_in_new_time_zone<T>(
-    from_tz: &T,
-    to_tz: &T,
-    ndt: NaiveDateTime,
-    ambiguous: &Ambiguous,
-) -> PolarsResult<DateTime<T>> 
-where T : TimeZone + std::fmt::Display
-{
-
-    match from_tz.from_local_datetime(&ndt) {
-        LocalResult::Single(dt) => Ok(dt.with_timezone(to_tz)),
-        LocalResult::Ambiguous(dt_earliest, dt_latest) => match ambiguous {
-            Ambiguous::Earliest => Ok(dt_earliest.with_timezone(to_tz)),
-            Ambiguous::Latest => Ok(dt_latest.with_timezone(to_tz)),
-            Ambiguous::Raise => {
-                polars_bail!(ComputeError: "datetime '{}' is ambiguous in time zone '{}'. Please use `ambiguous` to tell how it should be localized.", ndt, to_tz)
-            }
-        },
-        LocalResult::None => polars_bail!(ComputeError:
-            "datetime '{}' is non-existent in time zone '{}'. Non-existent datetimes are not yet supported",
-            ndt, to_tz
-        ),
-    }
-}
-
-pub(crate) fn impl_echo(
-    lat: &Series
-)  -> PolarsResult<Series> {
-    Ok(lat.clone())
 }

@@ -2,13 +2,11 @@ use crate::dateconversions::*;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type=Utf8)]
 fn lookup_timezone(inputs: &[Series]) -> PolarsResult<Series> {
-    //println!("I was called with {:?}", inputs);
+    
     let lats = &inputs[0];
     let lons = &inputs[1];
-    println!("lats {:?}", lats);
-    println!("lons {:?}", lons);
     impl_lookup_timezone(lats, lons)
 }
 
@@ -21,12 +19,6 @@ fn to_local_in_new_timezone(inputs: &[Series]) -> PolarsResult<Series> {
     impl_to_local_in_new_timezone(dates, lats, lons, "", "raise")
 }
 
-#[polars_expr(output_type=Float64)]
-fn echo(inputs: &[Series]) -> PolarsResult<Series> {
-    let lats = &inputs[0];
-    impl_echo(lats)
-}
-
 pub fn from_local_datetime(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = input_fields[0].clone();
     let dtype = match field.dtype {
@@ -35,6 +27,6 @@ pub fn from_local_datetime(input_fields: &[Field]) -> PolarsResult<Field> {
             "dtype '{}' not supported", field.dtype
         ),
     };
-    println!("from_local_datetime will return {}", dtype);
+
     Ok(Field::new(&field.name, dtype))
 }

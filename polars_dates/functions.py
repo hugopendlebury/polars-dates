@@ -19,82 +19,50 @@ if TYPE_CHECKING:
     from polars.type_aliases import IntoExpr
 
 lib = _get_shared_lib_location(__file__)
-print(f"lib is {lib}")
-
 
 if TYPE_CHECKING:
     from polars import Expr
     from polars.type_aliases import Ambiguous
 
 
-def echo(expr: str | pl.Expr) -> pl.Expr:
-    """
-    Return the Julian date corresponding to given datetimes.
-
-    Examples
-    --------
-    >>> from datetime import datetime
-    >>> import polars_xdt as xdt
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "date_col": [
-    ...             datetime(2013, 1, 1, 0, 30),
-    ...             datetime(2024, 1, 7, 13, 18, 51),
-    ...         ],
-    ...     }
-    ... )
-    >>> with pl.Config(float_precision=10) as cfg:
-    ...     df.with_columns(julian_date=xdt.to_julian_date("date_col"))
-    shape: (2, 2)
-    ┌─────────────────────┬────────────────────┐
-    │ date_col            ┆ julian_date        │
-    │ ---                 ┆ ---                │
-    │ datetime[μs]        ┆ f64                │
-    ╞═════════════════════╪════════════════════╡
-    │ 2013-01-01 00:30:00 ┆ 2456293.5208333335 │
-    │ 2024-01-07 13:18:51 ┆ 2460317.0547569445 │
-    └─────────────────────┴────────────────────┘
-    """
-    print("Echo function called")
-    expr = parse_into_expr(expr)
-    return expr.register_plugin(
-        lib=lib,
-        symbol="echo",
-        is_elementwise=True,
-        args=[],
-    )
-
 def lookup_timezone(expr: str | pl.Expr, other: IntoExpr) -> pl.Expr:
     """
-    Return the Julian date corresponding to given datetimes.
+    Return the Timezone as a string based on the latitude and longitude of a point
 
     Examples
     --------
+    >>> import polars as pl
+    >>> import polars_dates as pl_dates
     >>> from datetime import datetime
-    >>> import polars_xdt as xdt
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "date_col": [
-    ...             datetime(2013, 1, 1, 0, 30),
-    ...             datetime(2024, 1, 7, 13, 18, 51),
-    ...         ],
-    ...     }
-    ... )
-    >>> with pl.Config(float_precision=10) as cfg:
-    ...     df.with_columns(julian_date=xdt.to_julian_date("date_col"))
-    shape: (2, 2)
-    ┌─────────────────────┬────────────────────┐
-    │ date_col            ┆ julian_date        │
-    │ ---                 ┆ ---                │
-    │ datetime[μs]        ┆ f64                │
-    ╞═════════════════════╪════════════════════╡
-    │ 2013-01-01 00:30:00 ┆ 2456293.5208333335 │
-    │ 2024-01-07 13:18:51 ┆ 2460317.0547569445 │
-    └─────────────────────┴────────────────────┘
+    >>> df = (
+    ...     pl.DataFrame(data = {'lat' : [51.5054, 51.5054, 40.7128, 40.7128, 40.7128], 
+    ...                         'lon' : [0.0235, 0.0235, -74.0060, -74.0060, -74.0060],
+    ...                         'dt': [datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,3,0,0),
+    ...                                 datetime(2024,1,24,3,0,0)],
+    ...                         'values' : [5,5,5,10,10]}
+    ...                 )
+    ...     .with_columns(
+    ...          timezone = pl_dates.lookup_timezone(pl.col("lat"), pl.col("lon"))
+    ...     )
+    ... ) 
+
+    shape: (5, 5)
+    ┌─────────┬─────────┬─────────────────────┬────────┬──────────────────┐
+    │ lat     ┆ lon     ┆ dt                  ┆ values ┆ timezone         │
+    │ ---     ┆ ---     ┆ ---                 ┆ ---    ┆ ---              │
+    │ f64     ┆ f64     ┆ datetime[μs]        ┆ i64    ┆ str              │
+    ╞═════════╪═════════╪═════════════════════╪════════╪══════════════════╡
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ Europe/London    │
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ Europe/London    │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 09:00:00 ┆ 5      ┆ America/New_York │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ America/New_York │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ America/New_York │
+    └─────────┴─────────┴─────────────────────┴────────┴──────────────────┘
     """
-    print(f"lookup_timezone function called {expr} {other}")
     expr = parse_into_expr(expr)
-    print(f"Yo I got {expr}")
     return expr.register_plugin(
         lib=lib,
         symbol="lookup_timezone",
@@ -105,35 +73,40 @@ def lookup_timezone(expr: str | pl.Expr, other: IntoExpr) -> pl.Expr:
 
 def to_local_in_new_timezone(expr: str | pl.Expr, lat: IntoExpr, lon: IntoExpr) -> pl.Expr:
     """
-    Return the Julian date corresponding to given datetimes.
+    Uses the latitude and longitude to find the time zone then returns a date / time which is 
+    in the local time.
 
     Examples
     --------
     >>> from datetime import datetime
-    >>> import polars_xdt as xdt
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "date_col": [
-    ...             datetime(2013, 1, 1, 0, 30),
-    ...             datetime(2024, 1, 7, 13, 18, 51),
-    ...         ],
-    ...     }
-    ... )
-    >>> with pl.Config(float_precision=10) as cfg:
-    ...     df.with_columns(julian_date=xdt.to_julian_date("date_col"))
-    shape: (2, 2)
-    ┌─────────────────────┬────────────────────┐
-    │ date_col            ┆ julian_date        │
-    │ ---                 ┆ ---                │
-    │ datetime[μs]        ┆ f64                │
-    ╞═════════════════════╪════════════════════╡
-    │ 2013-01-01 00:30:00 ┆ 2456293.5208333335 │
-    │ 2024-01-07 13:18:51 ┆ 2460317.0547569445 │
-    └─────────────────────┴────────────────────┘
+    >>> df = (
+    ...     pl.DataFrame(data = {'lat' : [51.5054, 51.5054, 40.7128, 40.7128, 40.7128], 
+    ...                         'lon' : [0.0235, 0.0235, -74.0060, -74.0060, -74.0060],
+    ...                         'dt': [datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,9,0,0),
+    ...                                 datetime(2024,1,24,3,0,0),
+    ...                                 datetime(2024,1,24,3,0,0)],
+    ...                         'values' : [5,5,5,10,10]}
+    ...                 )
+    ...     .with_columns(
+    ...          timezone_conv = pl.col("dt").dateconversions.to_local_in_new_timezone(pl.col("lat"), pl.col("lon"))
+    ...     )
+    ... )  
+    shape: (5, 5)
+    ┌─────────┬─────────┬─────────────────────┬────────┬─────────────────────┐
+    │ lat     ┆ lon     ┆ dt                  ┆ values ┆ timezone_conv       │
+    │ ---     ┆ ---     ┆ ---                 ┆ ---    ┆ ---                 │
+    │ f64     ┆ f64     ┆ datetime[μs]        ┆ i64    ┆ datetime[ms]        │
+    ╞═════════╪═════════╪═════════════════════╪════════╪═════════════════════╡
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ 2024-01-24 09:00:00 │
+    │ 51.5054 ┆ 0.0235  ┆ 2024-01-24 09:00:00 ┆ 5      ┆ 2024-01-24 09:00:00 │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 09:00:00 ┆ 5      ┆ 2024-01-24 04:00:00 │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ 2024-01-23 22:00:00 │
+    │ 40.7128 ┆ -74.006 ┆ 2024-01-24 03:00:00 ┆ 10     ┆ 2024-01-23 22:00:00 │
+    └─────────┴─────────┴─────────────────────┴────────┴─────────────────────┘
     """
-    print(f"lookup_timezone function called {expr} {lat} {lon}")
     expr = parse_into_expr(expr)
-    print(f"Yo I got {expr}")
     return expr.register_plugin(
         lib=lib,
         symbol="to_local_in_new_timezone",

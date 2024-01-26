@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import polars_dates.namespace  # noqa: F401
 from polars_dates.functions import (
-    echo,
     lookup_timezone,
-    to_timezone_aware_date
+    to_local_in_new_timezone
 )
 
 from ._internal import __version__
 
 __all__ = [
-    "echo",
     "lookup_timezone",
-    "to_timezone_aware_date"
+    "to_local_in_new_timezone"
     "__version__",
 ]
