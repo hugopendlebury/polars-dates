@@ -36,7 +36,7 @@ fn integer_decode(val: f64) -> (u64, i16, i8) {
     (mantissa, exponent, sign)
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct Distance((u64, i16, i8));
 
 impl Distance {
@@ -45,47 +45,17 @@ impl Distance {
     }
 }
 
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
 struct Coordinates{
     lat: Distance,
     lon: Distance
 }
 
-
-pub(crate) fn impl_time_zone_difference_from(
-    from_tz: &str,
-    lat: &Series,
-    lons: &Series
-)  -> PolarsResult<Series> {
-    let mut cache = HashMap::<Coordinates, &str>::new();
-    let lats_iter = lat.f64()?.into_iter();
-    let lons_iter = lons.f64()?.into_iter();
-    cache.get(&Coordinates{lat: Distance::new(1.1), lon:Distance::new(1.2)});
-    let results = lats_iter.zip(lons_iter).map(|coords| {
-        
-        let lat = coords.0.map_or(0.0, |f| f);
-        let lng = coords.1.map_or(0.0, |f| f);
-        let lkp_key = Coordinates{lat: Distance::new(lat), lon:Distance::new(lng)};
-        let cache_key = cache.get(&lkp_key);
-
-        match cache_key {
-            Some(key) => key,
-            None => {
-                let timezone_names = FINDER.get_tz_names(lng, lat);
-                let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
-                cache.insert(lkp_key, time_zone);
-                time_zone
-            }
-        }
-        let from_tz = parse_time_zone(from_tz);
-        let start_date = DateTime<from_tz>
-        start_date
-
-    });
-
-    Ok(Series::from_iter(results))
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+struct CoodinateTime{
+    lcation: Coordinates,
+    dt: i64
 }
-
 
 pub(crate) fn impl_lookup_timezone(
     lat: &Series,
@@ -146,7 +116,9 @@ pub(crate) fn impl_to_local_in_new_timezone(
     let from_tz = parse_time_zone(from_time_zone)?;
 
 
-    let mut cache = HashMap::<Coordinates, &str>::new();
+    let mut coordinates_cache = HashMap::<Coordinates, &str>::new();
+    let mut dates_cache = HashMap::<CoodinateTime, NaiveDateTime>::new();
+    
     let dates_iter = dates.datetime()?.into_iter();
     let lats_iter = lat.f64()?.into_iter();
     let lons_iter = lons.f64()?.into_iter();
@@ -156,15 +128,15 @@ pub(crate) fn impl_to_local_in_new_timezone(
         
                 let lat = coords.0.0.map_or(0.0, |f| f);
                 let lng = coords.0.1.map_or(0.0, |f| f);
-                let lkp_key = Coordinates{lat: Distance::new(lat), lon:Distance::new(lng)};
-                let cache_key = cache.get(&lkp_key);
+                let coordinates = Coordinates{lat: Distance::new(lat), lon:Distance::new(lng)};
+                let cache_key = coordinates_cache.get(&coordinates);
 
                 let time_zone = match cache_key {
                     Some(key) => key,
                     None => {
                         let timezone_names = FINDER.get_tz_names(lng, lat);
                         let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
-                        cache.insert(lkp_key, time_zone);
+                        coordinates_cache.insert(coordinates, time_zone);
                         time_zone
                     }
                 };
@@ -182,12 +154,19 @@ pub(crate) fn impl_to_local_in_new_timezone(
 
                 match timestamp {
                     Some(dt) => {
-
-                        let ndt = timestamp_to_datetime(dt);
-                        let to_tz = parse_time_zone(time_zone)?;
-                        Ok::<Option<NaiveDateTime>, PolarsError>(Some(
-                            naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?
-                        ))
+                        let location_time = CoodinateTime{lcation: coordinates, dt};
+                        let cached_date =  dates_cache.get(&location_time);
+                        match cached_date {
+                            Some(dt) => Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt)),
+                            None => {
+                                let ndt = timestamp_to_datetime(dt);
+                                let to_tz = parse_time_zone(time_zone)?;
+                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(
+                                    naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?
+                                ))
+                            }
+                        }
+ 
 
 
                     },

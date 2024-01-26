@@ -16,14 +16,6 @@ fn lookup_timezone(inputs: &[Series]) -> PolarsResult<Series> {
     impl_lookup_timezone(lats, lons)
 }
 
-
-#[polars_expr(output_type=UInt16)]
-fn time_zone_difference_from(inputs: &[Series], kwargs: FromDatetimeKwargs) -> PolarsResult<Series> {
-    let lats = &inputs[0];
-    let lons = &inputs[1];
-    impl_time_zone_difference_from(&kwargs.from_tz, lats, lons)
-}
-
 #[polars_expr(output_type_func=from_local_datetime)]
 fn to_local_in_new_timezone(inputs: &[Series]) -> PolarsResult<Series> {
 
