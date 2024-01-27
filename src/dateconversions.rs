@@ -6,14 +6,20 @@ use lazy_static::lazy_static;
 use chrono::{LocalResult, NaiveDateTime, TimeZone, DateTime};
 
 use chrono_tz::Tz;
-use pyo3_polars::export::polars_core::error::PolarsError;
+use polars_arrow::legacy::floats::OrdFloat;
+use pyo3_polars::export::polars_core::utils::rayon::iter::{IntoParallelRefIterator, IntoParallelIterator};
+use pyo3_polars::export::polars_core::{error::PolarsError, POOL};
 
+use ordered_float::NotNan;
+
+
+//use polars_core::utils::{_set_partition_size, slice_offsets, split_ca};
 use pyo3_polars::export::polars_core::utils::arrow::temporal_conversions::{
     timestamp_ms_to_datetime, timestamp_ns_to_datetime, timestamp_us_to_datetime,
 };
 use rayon::prelude::*;
-
 use tzf_rs::DefaultFinder;
+
 
 lazy_static! {
     static ref FINDER: DefaultFinder = DefaultFinder::new();
@@ -104,6 +110,7 @@ enum Ambiguous {
     Raise
 }
 
+/* 
 pub(crate) fn impl_to_local_in_new_timezone(
     dates: &Series,
     lat: &Series,
@@ -192,8 +199,9 @@ pub(crate) fn impl_to_local_in_new_timezone(
     let s = Series::new("ts", data.collect::<Vec<_>>());
     Ok(s)
 
-
 }
+*/
+
 
 fn naive_local_to_naive_local_in_new_time_zone(
     from_tz: &Tz,
@@ -216,4 +224,163 @@ fn naive_local_to_naive_local_in_new_time_zone(
             ndt, to_tz
         ),
     }
+}
+
+macro_rules! split_array {
+    ($ca: expr, $n: expr, $ty : ty) => {{
+        if $n == 1 {
+            return Ok(vec![$ca.clone()]);
+        }
+        let total_len = $ca.len();
+        let chunk_size = total_len / $n;
+
+        let v = (0..$n)
+            .map(|i| {
+                let offset = i * chunk_size;
+                let len = if i == ($n - 1) {
+                    total_len - offset
+                } else {
+                    chunk_size
+                };
+                $ca.slice((i * chunk_size) as $ty, len)
+            })
+            .collect();
+        Ok(v)
+    }};
+}
+
+pub fn split_ca<T>(ca: &ChunkedArray<T>, n: usize) -> PolarsResult<Vec<ChunkedArray<T>>>
+where
+    T: PolarsDataType,
+{
+    split_array!(ca, n, i64)
+}
+
+/* 
+pub(crate) fn impl_to_local_in_new_timezone_parallel(
+    dates: &Series,
+    lat: &Series,
+    lons: &Series,
+    from_tz: &str,
+    ambiguous: &str,
+)  -> PolarsResult<Series> {
+    let dtype = dates.dtype();
+
+    let from_time_zone = "UTC";
+    let from_tz = parse_time_zone(from_time_zone)?;
+
+    let n_threads = POOL.current_num_threads();
+
+    let coordinates = lat.f64()?.into_iter().zip(lons.f64()?.into_iter());
+    let dates = dates.datetime()?;
+    
+    POOL.install(|| {
+        coordinates.into_iter().par_iter()
+    });
+
+}
+*/
+
+#[derive(Eq, Hash, PartialEq, Copy, Clone)]
+struct GeoPoint {
+    lat: NotNan<f64>,
+    lon: NotNan<f64>
+}
+
+#[derive(Eq, Hash, PartialEq)]
+struct GeoPointTime{
+    location: GeoPoint,
+    dt: i64
+}
+
+
+pub(crate) fn impl_to_local_in_new_timezone(
+    dates: &Series,
+    lat: &Series,
+    lons: &Series,
+    from_tz: &str,
+    ambiguous: &str,
+)  -> PolarsResult<Series> {
+    let dtype = dates.dtype();
+
+    let from_time_zone = "UTC";
+    let from_tz = parse_time_zone(from_time_zone)?;
+
+
+    let mut coordinates_cache = HashMap::<GeoPoint, &str>::new();
+    let mut dates_cache = HashMap::<GeoPointTime, NaiveDateTime>::new();
+    
+    let dates_iter = dates.datetime()?.into_iter();
+    let lats_iter = lat.f64()?.into_iter();
+    let lons_iter = lons.f64()?.into_iter();
+
+    let timestamp_to_datetime: fn(i64) -> NaiveDateTime = match dtype {
+        DataType::Datetime(TimeUnit::Microseconds, _) => timestamp_us_to_datetime,
+        DataType::Datetime(TimeUnit::Milliseconds, _) => timestamp_ms_to_datetime,
+        DataType::Datetime(TimeUnit::Nanoseconds, _) => timestamp_ns_to_datetime,
+        _ => panic!("Unsupported dtype {}", dtype)
+    };
+
+    let results = lats_iter.zip(lons_iter).
+            zip(dates_iter).map(|coords| {
+        
+                let lat = coords.0.0.unwrap();
+                let lng = coords.0.1.unwrap();
+                let coordinates = GeoPoint{lat: NotNan::new(lat).unwrap(), lon:NotNan::new(lng).unwrap()};
+                let timestamp = coords.1;
+
+                //Check if we already have a local datetime for this coordinate and date
+                match timestamp {
+                    Some(dt) => {
+                        let location_time = GeoPointTime{location: coordinates, dt};
+                        let cached_date =  dates_cache.get(&location_time);
+                        match cached_date {
+                            //Ok we have already come across this specific date in the same lat / lon
+                            //return the result
+                            Some(dt) => {
+                                println!("Found match in cache");
+                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt))
+                            },
+                            None => {
+                                //Check if we have already looked up the timezone for this lat / long
+                                let cache_key = coordinates_cache.get(&coordinates);
+
+                                let time_zone = match cache_key {
+                                    Some(key) => key,
+                                    None => {
+                                        let timezone_names = FINDER.get_tz_names(lng, lat);
+                                        let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
+                                        coordinates_cache.insert(coordinates.clone(), time_zone);
+                                        time_zone
+                                    }
+                                };
+
+                                //We not have the timezone either from the cache or from a function call
+                                //now get the local time and cache it
+                                let ndt = timestamp_to_datetime(dt);
+                                let to_tz = parse_time_zone(time_zone)?;
+                                let result = naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?;
+                                dates_cache.insert(location_time, result);
+                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(result))
+                            }
+                        }
+ 
+
+
+                    },
+                    _ => Ok(None),
+                }
+            });
+    
+    let data = results.map(|r| {
+        match r {
+           Ok(d) => { d },
+           Err(_) => { None }
+        }
+    });
+
+    let s = Series::new("ts", data.collect::<Vec<_>>());
+    Ok(s)
+
+
 }
