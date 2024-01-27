@@ -161,9 +161,9 @@ pub(crate) fn impl_to_local_in_new_timezone(
                             None => {
                                 let ndt = timestamp_to_datetime(dt);
                                 let to_tz = parse_time_zone(time_zone)?;
-                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(
-                                    naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?
-                                ))
+                                let result = naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?;
+                                dates_cache.insert(location_time, result);
+                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(result))
                             }
                         }
  
