@@ -4,6 +4,8 @@ Date routines for [Polars](https://www.pola.rs/).
 
 - ✅ blazingly fast, written in Rust!
 - ✅ seamless Polars integration!
+- ✅ lookup timezones based on latitude / longitude
+- ✅ convert a datetime to the local time using latitude / longitude
 
 
 Installation
