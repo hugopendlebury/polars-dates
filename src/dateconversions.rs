@@ -11,6 +11,7 @@ use pyo3_polars::export::polars_core::error::PolarsError;
 use pyo3_polars::export::polars_core::utils::arrow::temporal_conversions::{
     timestamp_ms_to_datetime, timestamp_ns_to_datetime, timestamp_us_to_datetime,
 };
+use rayon::prelude::*;
 
 use tzf_rs::DefaultFinder;
 
@@ -123,42 +124,49 @@ pub(crate) fn impl_to_local_in_new_timezone(
     let lats_iter = lat.f64()?.into_iter();
     let lons_iter = lons.f64()?.into_iter();
 
+    let timestamp_to_datetime: fn(i64) -> NaiveDateTime = match dtype {
+        DataType::Datetime(TimeUnit::Microseconds, _) => timestamp_us_to_datetime,
+        DataType::Datetime(TimeUnit::Milliseconds, _) => timestamp_ms_to_datetime,
+        DataType::Datetime(TimeUnit::Nanoseconds, _) => timestamp_ns_to_datetime,
+        _ => panic!("Unsupported dtype {}", dtype)
+    };
+
     let results = lats_iter.zip(lons_iter).
             zip(dates_iter).map(|coords| {
         
                 let lat = coords.0.0.map_or(0.0, |f| f);
                 let lng = coords.0.1.map_or(0.0, |f| f);
                 let coordinates = Coordinates{lat: Distance::new(lat), lon:Distance::new(lng)};
-                let cache_key = coordinates_cache.get(&coordinates);
-
-                let time_zone = match cache_key {
-                    Some(key) => key,
-                    None => {
-                        let timezone_names = FINDER.get_tz_names(lng, lat);
-                        let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
-                        coordinates_cache.insert(coordinates, time_zone);
-                        time_zone
-                    }
-                };
-                
-                //let tz  = parse_time_zone(time_zone);
                 let timestamp = coords.1;
-            
 
-                let timestamp_to_datetime: fn(i64) -> NaiveDateTime = match dtype {
-                    DataType::Datetime(TimeUnit::Microseconds, _) => timestamp_us_to_datetime,
-                    DataType::Datetime(TimeUnit::Milliseconds, _) => timestamp_ms_to_datetime,
-                    DataType::Datetime(TimeUnit::Nanoseconds, _) => timestamp_ns_to_datetime,
-                    _ => panic!("Unsupported dtype {}", dtype)
-                };
-
+                //Check if we already have a local datetime for this coordinate and date
                 match timestamp {
                     Some(dt) => {
                         let location_time = CoodinateTime{lcation: coordinates, dt};
                         let cached_date =  dates_cache.get(&location_time);
                         match cached_date {
-                            Some(dt) => Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt)),
+                            //Ok we have already come across this specific date in the same lat / lon
+                            //return the result
+                            Some(dt) => {
+                                println!("Found match in cache");
+                                Ok::<Option<NaiveDateTime>, PolarsError>(Some(*dt))
+                            },
                             None => {
+                                //Check fi we have already looked up the timezone for this lat / long
+                                let cache_key = coordinates_cache.get(&coordinates);
+
+                                let time_zone = match cache_key {
+                                    Some(key) => key,
+                                    None => {
+                                        let timezone_names = FINDER.get_tz_names(lng, lat);
+                                        let time_zone = timezone_names.last().map_or("UNKNOWN", |f| f);
+                                        coordinates_cache.insert(coordinates, time_zone);
+                                        time_zone
+                                    }
+                                };
+
+                                //We not have the timezone either from the cache or from a function call
+                                //now get the local time and cache it
                                 let ndt = timestamp_to_datetime(dt);
                                 let to_tz = parse_time_zone(time_zone)?;
                                 let result = naive_local_to_naive_local_in_new_time_zone(&from_tz, &to_tz, ndt, &Ambiguous::Raise)?;
@@ -172,7 +180,6 @@ pub(crate) fn impl_to_local_in_new_timezone(
                     },
                     _ => Ok(None),
                 }
-
             });
     
     let data = results.map(|r| {

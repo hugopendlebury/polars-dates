@@ -20,6 +20,7 @@ polars-ops = { version = "=0.34.2", default-features = false }
 polars-arrow = { version = "=0.34.2", default-features = false }
 lazy_static = "1.4.0"
 tzf-rs = "0.4.5"
+rayon = {version = "1.7"}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 jemallocator = { version = "0.5", features = ["disable_initial_exec_tls"] }
