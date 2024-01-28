@@ -25,6 +25,15 @@ fn to_local_in_new_timezone(inputs: &[Series]) -> PolarsResult<Series> {
     impl_to_local_in_new_timezone(dates, lats, lons, "", "raise")
 }
 
+#[polars_expr(output_type_func=from_local_datetime)]
+fn to_local_in_new_timezone_struct(inputs: &[Series]) -> PolarsResult<Series> {
+
+    let dates = &inputs[0];
+    let lat_lons = &inputs[1];
+
+    impl_to_local_in_new_timezone_struct(dates, lat_lons, "", "raise")
+}
+
 pub fn from_local_datetime(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = input_fields[0].clone();
     let dtype = match field.dtype {

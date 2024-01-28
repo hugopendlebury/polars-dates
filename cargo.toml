@@ -14,7 +14,7 @@ pyo3-polars = { version = "0.8.0", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4.31", default-features = false, features = ["std", "unstable-locales"] } 
 chrono-tz = "0.8.5"
-polars = { version = "=0.34.2", features = ["strings", "dtype-date"], default-features = false }
+polars = { version = "=0.34.2", features = ["strings", "dtype-date", "dtype-struct"], default-features = false }
 polars-core = { version = "=0.34.2", default-features = false }
 polars-time = { version = "=0.34.2", features = ["timezones"], default-features = false }
 polars-ops = { version = "=0.34.2", default-features = false }

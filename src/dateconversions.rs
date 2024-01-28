@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::io::Error;
+use std::ops::Deref;
 
 use polars::prelude::*;
 use lazy_static::lazy_static;
 use chrono::{LocalResult, NaiveDateTime, TimeZone, DateTime};
 
 use chrono_tz::Tz;
+use polars_arrow::array::StructArray;
 use polars_arrow::legacy::floats::OrdFloat;
+use polars_arrow::scalar::{Scalar, PrimitiveScalar};
 use pyo3_polars::export::polars_core::utils::rayon::iter::{IntoParallelRefIterator, IntoParallelIterator};
 use pyo3_polars::export::polars_core::{error::PolarsError, POOL};
 
@@ -382,5 +385,83 @@ pub(crate) fn impl_to_local_in_new_timezone(
     let s = Series::new("ts", data.collect::<Vec<_>>());
     Ok(s)
 
+
+}
+
+
+
+
+
+pub(crate) fn impl_to_local_in_new_timezone_struct(
+    dates: &Series,
+    lat_lons: &Series,
+    from_tz: &str,
+    ambiguous: &str,
+)  -> PolarsResult<Series> {
+
+    let dts = dates.datetime()?.into_iter();
+
+    //TODO - Change to into_par_iter()
+    let processed = lat_lons.chunks().into_iter().map(|f| {
+        
+        let results = if let Some(sa) = f.as_any().downcast_ref::<StructArray>() {
+            sa.iter().for_each(|arr_elements| {
+      
+                let array_iter = arr_elements.as_ref().unwrap().into_iter();
+                
+                //TODO - possibly replace unwrap with ok()?
+                let [lat_scalar, lon_scalar] : [_;2 ]= array_iter.collect::<Vec<_>>().try_into().unwrap();
+                let lat = lat_scalar.as_any().downcast_ref::<PrimitiveScalar<f64>>().unwrap().value().unwrap();
+                let lon = lon_scalar.as_any().downcast_ref::<PrimitiveScalar<f64>>().unwrap().value().unwrap();
+                //println!("lat is {:?}", lat);
+                //println!("lon is {:?}", lon);
+            })
+
+        } else {
+            polars_bail!(ComputeError:"Is not struct type")
+        };
+        Ok(results)
+            
+    });
+
+        /* 
+        let converted_dates = match sa {
+            Some(arr) => {
+                println!("Yo from {:?}", arr);
+                arr.iter().for_each(|arrElements| {
+                    //Not using pattern matching how is it possible to not have a struct in this case ?
+                    let vec = arrElements.unwrap();
+                    //let (name, score) = vec;
+
+                });
+
+                arr.into_iter().map(|f| {
+
+                });
+
+                /* 
+                a.into_iter().map(|sf| {
+                    match sf {
+                        Some(values) => {
+                            println!("HUGO Got values {:?}", values);
+                            Ok(values)
+                        },
+                        None => { polars_bail!(ComputeError:"Is not struct type") }
+                    }
+                })*/
+            },
+            None => { polars_bail!(ComputeError:"Is not struct type") }
+        };
+
+        Ok(converted_dates)
+
+    });
+  
+    */
+    processed.for_each(|f| {
+        f;
+    });
+
+    Ok(lat_lons.clone())
 
 }
