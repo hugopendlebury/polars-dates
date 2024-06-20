@@ -6,6 +6,9 @@ Date routines for [Polars](https://www.pola.rs/).
 - ✅ seamless Polars integration!
 - ✅ Determine timezone string from latitude and longitudes!
 - ✅ Get localised date times based on the latitude and longitudes!
+- ✅ lookup timezones based on latitude / longitude
+
+
 
 
 Installation
