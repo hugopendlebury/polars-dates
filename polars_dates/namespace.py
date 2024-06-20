@@ -12,7 +12,6 @@ class ExprXDTNamespace:
     """eXtra stuff for DateTimes."""
 
     def __init__(self, expr: pl.Expr) -> None:
-        print("INIT EXPRESSIONS")
         self._expr = expr
 
     def __getattr__(self, function_name: str) -> Callable[[Any], pl.Expr]:

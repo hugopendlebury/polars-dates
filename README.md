@@ -4,8 +4,11 @@ Date routines for [Polars](https://www.pola.rs/).
 
 - ✅ blazingly fast, written in Rust!
 - ✅ seamless Polars integration!
+- ✅ Determine timezone string from latitude and longitudes!
+- ✅ Get localised date times based on the latitude and longitudes!
 - ✅ lookup timezones based on latitude / longitude
-- ✅ convert a datetime to the local time using latitude / longitude
+
+
 
 
 Installation
@@ -13,7 +16,7 @@ Installation
 
 First, you need to [install Polars](https://pola-rs.github.io/polars/user-guide/installation/).
 
-Then, you'll need to install `polars-validation`:
+Then, you'll need to install `polars-dates`:
 ```console
 pip install polars-dates
 ```
@@ -51,7 +54,7 @@ df = (
                         'values' : [5,5,5,10,10]}
                 )
     .with_columns(
-         pl_dates.lookup_timezone(pl.col("lat"), pl.col("lon"))
+         timezone = pl_dates.lookup_timezone(pl.col("lat"), pl.col("lon"))
     )
 ) 
 ```
@@ -80,7 +83,7 @@ df = (
 )  
 ```
 
-Note in the example above how the dateconversions namespace is applied to the column dt.
+Note in the example we show how the dateconversions namespace is applied to the column dt.
 
 This could also be written as
 
