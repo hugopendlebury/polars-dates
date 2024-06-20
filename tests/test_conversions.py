@@ -2,7 +2,7 @@ import pytest
 
 import polars as pl
 from datetime import datetime
-import polars_dates as pl_dates
+import polars_geodates as pl_dates
 
 
 def test_london_new_york():

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0", "polars>=0.20.0"]
+requires = ["maturin>=1.0,<2.0", "polars>=0.19.2"]
 build-backend = "maturin"
 
 [project]
-name = "polars-dates"
-description = "Validation routines for Polars"
+name = "polars_geodates"
+description = "Converts from onetime to another based on latatitude and longitude"
 readme = "README.md"
 authors = [
   { name="Hugo Pendlebury" },
@@ -19,4 +19,4 @@ version = "0.19.12"
 requires-python = ">=3.8"
 
 [tool.maturin]
-module-name = "polars_dates._internal"
+module-name = "polars_geodates._internal"
