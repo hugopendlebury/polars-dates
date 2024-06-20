@@ -48,7 +48,6 @@ jobs:
         verbose: true
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-    steps:
     # retrieve your distributions here
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
