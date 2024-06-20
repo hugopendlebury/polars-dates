@@ -85,7 +85,7 @@ jobs:
       - name: Download sdists and wheels
         uses: actions/download-artifact@v3
         with:
-          #path: dist
+          path: dist
           merge-multiple: true
       - name: Publish to PyPI
         if: inputs.dry-run == false
