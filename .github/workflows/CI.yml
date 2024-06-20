@@ -14,53 +14,65 @@ permissions:
   contents: read
 
 jobs:
-  linux:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [x86_64, x86]
         python-version: ['3.10', '3.11' ]
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        architecture: x64
-    - name: Install maturin
-      run: sudo pip install maturin
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        components: rustfmt, clippy
-    - name: Build
-      run: maturin build --release --out dist --interpreter ${{ matrix.python-version }} --skip-auditwheel
-    - name: Store the distribution packages
-      uses: actions/upload-artifact@v3
-      with:
-        name: python-package-distributions
-        path: dist/
-    - name: Upload release to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      environment:
-        name: pypi
-        url: https://pypi.org/p/polarsdates
-        with:
-          verbose: true
-      permissions:
-        id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
-  sdist:
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Build sdist
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+      - name: Create source distribution
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
-          args: --out dist
+          args: >
+            --manifest-path Cargo.toml
+            --out dist
       - name: Upload sdist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: sdist-${{ matrix.package }}
+          path: dist/*.tar.gz
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          target: ${{ steps.target.outputs.target }}
+          args: >
+            --release
+            --manifest-path Cargo.toml
+            --out dist
+          manylinux: ${{ matrix.architecture == 'aarch64' && '2_24' || 'auto' }}
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.package }}-${{ matrix.os }}-${{ matrix.architecture }}
+          path: dist/*.whl
+
+  publish-to-pypi:
+    needs: [build]
+    environment:
+      name: release-python
+      url: https://pypi.org/project/polarsdate
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download sdists and wheels
+        uses: actions/download-artifact@v4
+        with:
           path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        if: inputs.dry-run == false
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
