@@ -19,19 +19,15 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, x86]
-        python-version: ['3.9', '3.10', '3.11' ]
+        python-version: ['3.10', '3.11' ]
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
         architecture: x64
-    - name: Install libsmb
-      run: sudo apt update && sudo apt install -y libsmbclient-dev libsmbclient
-    - name: Install maturn
+    - name: Install maturin
       run: sudo pip install maturin
-      #- name: Setup containers
-      #  run: docker-compose -f "tests/docker-compose.yml" up -d --build
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -39,35 +35,23 @@ jobs:
         components: rustfmt, clippy
     - name: Build
       run: maturin build --release --out dist --interpreter ${{ matrix.python-version }} --skip-auditwheel
-    - name: Upload wheels
+    - name: Store the distribution packages
       uses: actions/upload-artifact@v3
       with:
-        name: wheels
-        path: dist
-    - name: upload release to PyPI
-      id: mint-token
-      run: |
-        # retrieve the ambient OIDC token
-        resp=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pypi")
-        oidc_token=$(jq -r '.value' <<< "${resp}")
-
-        # exchange the OIDC token for an API token
-        resp=$(curl -X POST https://pypi.org/_/oidc/mint-token -d "{\"token\": \"${oidc_token}\"}")
-        api_token=$(jq -r '.token' <<< "${resp}")
-
-        # mask the newly minted API token, so that we don't accidentally leak it
-        echo "::add-mask::${api_token}"
-
-        # see the next step in the workflow for an example of using this step output
-        echo "api-token=${api_token}" >> "${GITHUB_OUTPUT}"
-    - name: publish
-      # gh-action-pypi-publish uses TWINE_PASSWORD automatically
-      uses: pypa/gh-action-pypi-publish@release/v1
+        name: python-package-distributions
+        path: dist/
+    - name: Upload release to PyPI
+    environment:
+      name: pypi
+      url: https://pypi.org/p/polarsdates
       with:
-        password: ${{ steps.mint-token.outputs.api-token }}
-
-
+        verbose: true
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+    steps:
+    # retrieve your distributions here
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
   sdist:
     runs-on: ubuntu-latest
     steps:
