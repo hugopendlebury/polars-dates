@@ -45,12 +45,12 @@ jobs:
           args: >
             --manifest-path Cargo.toml
             --out dist
-      - name: Upload sdist
-        uses: actions/upload-artifact@v3
-        with:
-          name: sdist-${{ matrix.package }}
-          overwrite: true
-          path: dist/*.tar.gz
+      #- name: Upload sdist
+      #  uses: actions/upload-artifact@v3
+      #  with:
+      #    name: sdist-${{ matrix.package }}
+      #    overwrite: true
+      #    path: dist/*.tar.gz
       - name: Output sdist artifact ID
         run:  echo 'Artifact ID is ${{ steps.artifact-upload-step.outputs.artifact-id }}'
       - name: Build wheel
@@ -66,7 +66,8 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v3
         with:
-          name: wheel-${{ matrix.package }}-${{ matrix.os }}-${{ matrix.architecture }}
+          #name: wheel-${{ matrix.package }}-${{ matrix.os }}-${{ matrix.architecture }}
+          name: polars_dates-0.19.12-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
           path: dist/*.whl
       - name: Output wheel artifact ID
         run:  echo 'Artifact ID is ${{ steps.artifact-upload-step.outputs.artifact-id }}'
@@ -84,7 +85,7 @@ jobs:
       - name: Download sdists and wheels
         uses: actions/download-artifact@v3
         with:
-          path: dist
+          #path: dist
           merge-multiple: true
       - name: Publish to PyPI
         if: inputs.dry-run == false
