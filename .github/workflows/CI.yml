@@ -13,13 +13,18 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHON_VERSION: '3.8'
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [x86_64, x86]
-        python-version: ['3.10', '3.11' ]
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +73,7 @@ jobs:
 
     steps:
       - name: Download sdists and wheels
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           path: dist
           merge-multiple: true
